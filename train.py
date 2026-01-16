@@ -16,12 +16,19 @@ os.makedirs("output/results", exist_ok=True)
 
 df = pd.read_csv(DATA_PATH, sep=';')
 
-X = df.drop("quality", axis=1)
+# Feature subset selection
+selected_features = [
+    "alcohol",
+    "sulphates",
+    "volatile acidity",
+    "citric acid"
+]
+
+X = df[selected_features]
 y = df["quality"]
 
-# Changed split strategy
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.3, random_state=42
+    X, y, test_size=0.2, random_state=42
 )
 
 scaler = StandardScaler()

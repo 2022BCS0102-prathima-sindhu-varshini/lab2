@@ -39,3 +39,5 @@ with open("metrics.json", "w") as f:
     json.dump({"mse": mse}, f)
 
 print(f"MSE: {mse}")
+
+

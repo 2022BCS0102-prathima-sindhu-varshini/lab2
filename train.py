@@ -32,11 +32,17 @@ pipeline.fit(X_train, y_train)
 preds = pipeline.predict(X_test)
 mse = mean_squared_error(y_test, preds)
 
-# Save artifacts
-joblib.dump(pipeline, "model.pkl")
+import os
 
-with open("metrics.json", "w") as f:
-    json.dump({"mse": mse}, f)
+os.makedirs("output", exist_ok=True)
+
+joblib.dump(pipeline, "output/model.pkl")
+
+with open("output/metrics.json", "w") as f:
+    json.dump({"MSE": mse}, f)
+
+print(f"MSE: {mse}")
+
 
 print(f"MSE: {mse}")
 

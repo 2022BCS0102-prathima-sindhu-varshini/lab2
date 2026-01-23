@@ -6,6 +6,9 @@ on:
       - main
 
 jobs:
+  # ------------------------
+  # JOB 1: TRAIN (CI)
+  # ------------------------
   train:
     runs-on: ubuntu-latest
 
@@ -39,11 +42,17 @@ jobs:
           path: metrics.json
 
 
+  # ------------------------
+  # JOB 2: DEPLOY (CD)
+  # ------------------------
   deploy:
     needs: train
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download trained model artifact
         uses: actions/download-artifact@v4
         with:
@@ -54,6 +63,37 @@ jobs:
         with:
           name: training-metrics
 
-      - name: Deployment placeholder
+      - name: Compare MSE with Lab 2 baseline
         run: |
-          echo "Job 2 triggered after successful training"
+          echo "Reading metrics.json"
+          CURRENT_MSE=$(python - <<EOF
+import json
+with open("metrics.json") as f:
+    data = json.load(f)
+print(data["mse"])
+EOF
+          )
+
+          echo "Current MSE: $CURRENT_MSE"
+          echo "Best MSE (Lab 2): ${{ vars.BEST_MSE }}"
+
+          if (( $(echo "$CURRENT_MSE >= ${{ vars.BEST_MSE }}" | bc -l) )); then
+            echo "2022BCS0102 ---- Metric did not improve"
+            exit 0
+          else
+            echo "Metric improved, proceeding to Docker build"
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-api:latest .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-api:latest

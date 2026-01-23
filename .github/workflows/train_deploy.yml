@@ -1,99 +1,76 @@
-name: Train and Deploy Pipeline
-
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  # ------------------------
-  # JOB 1: TRAIN (CI)
-  # ------------------------
-  train:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Run training script
-        run: |
-          python train.py
-
-      - name: Upload trained model
-        uses: actions/upload-artifact@v4
-        with:
-          name: trained-model
-          path: model.pkl
-
-      - name: Upload training metrics
-        uses: actions/upload-artifact@v4
-        with:
-          name: training-metrics
-          path: metrics.json
-
-
-  # ------------------------
-  # JOB 2: DEPLOY (CD)
-  # ------------------------
-  deploy:
-    needs: train
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download trained model artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: trained-model
-
-      - name: Download metrics artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: training-metrics
-
-      - name: Compare MSE with Lab 2 baseline
-        run: |
-          echo "Reading metrics.json"
-          CURRENT_MSE=$(python - <<EOF
+import pandas as pd
+import numpy as np
 import json
-with open("metrics.json") as f:
-    data = json.load(f)
-print(data["mse"])
-EOF
-          )
+import joblib
 
-          echo "Current MSE: $CURRENT_MSE"
-          echo "Best MSE (Lab 2): ${{ vars.BEST_MSE }}"
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 
-          if (( $(echo "$CURRENT_MSE >= ${{ vars.BEST_MSE }}" | bc -l) )); then
-            echo "2022BCS0102 ---- Metric did not improve"
-            exit 0
-          else
-            echo "Metric improved, proceeding to Docker build"
-          fi
+# -----------------------------
+# 1. Load dataset
+# -----------------------------
+DATA_PATH = "dataset/winequality-red.csv"
+df = pd.read_csv(DATA_PATH, sep=";")
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+X = df.drop("quality", axis=1)
+y = df["quality"]
 
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-api:latest .
+# -----------------------------
+# 2. Train-test split
+# -----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 
-      - name: Push Docker image
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-api:latest
+# -----------------------------
+# 3. Model (Best from Lab 2)
+# -----------------------------
+model = Pipeline(
+    steps=[
+        ("scaler", StandardScaler()),
+        (
+            "rf",
+            RandomForestRegressor(
+                n_estimators=100,
+                random_state=42
+            ),
+        ),
+    ]
+)
+
+# -----------------------------
+# 4. Train model
+# -----------------------------
+model.fit(X_train, y_train)
+
+# -----------------------------
+# 5. Evaluate
+# -----------------------------
+y_pred = model.predict(X_test)
+
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+# -----------------------------
+# 6. Print metrics (for logs)
+# -----------------------------
+print(f"MSE: {mse}")
+print(f"R2 Score: {r2}")
+
+# -----------------------------
+# 7. Save artifacts
+# -----------------------------
+joblib.dump(model, "model.pkl")
+
+metrics = {
+    "mse": mse,
+    "r2_score": r2
+}
+
+with open("metrics.json", "w") as f:
+    json.dump(metrics, f, indent=4)
+
+print("Training completed successfully.")

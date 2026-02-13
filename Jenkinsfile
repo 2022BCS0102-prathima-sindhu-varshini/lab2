@@ -3,23 +3,17 @@ pipeline {
 
     stages {
 
-        stage('Clone Repository') {
-            steps {
-                echo "Cloning repository..."
-            }
-        }
-
         stage('Install Dependencies') {
             steps {
                 echo "Installing dependencies..."
-                bat 'pip install -r requirements.txt'
+                sh 'pip3 install -r requirements.txt'
             }
         }
 
         stage('Run Training') {
             steps {
                 echo "Running model training..."
-                bat 'python train.py'
+                sh 'python3 train.py'
             }
         }
 

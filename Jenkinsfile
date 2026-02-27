@@ -4,7 +4,6 @@ pipeline {
     environment {
         IMAGE_NAME = "2022bcs0102sindhuvarshinisp/2022bcs0102-wine-quality:latest"
         CONTAINER_NAME = "wine_test_container"
-        PORT = "8001"
     }
 
     stages {
@@ -18,19 +17,19 @@ pipeline {
 
         stage('Run Container') {
             steps {
-                echo "Starting container..."
-                sh "docker run -d -p ${PORT}:8000 --name ${CONTAINER_NAME} ${IMAGE_NAME}"
+                echo "Starting container with host network..."
+                sh "docker run -d --network host --name ${CONTAINER_NAME} ${IMAGE_NAME}"
             }
         }
 
         stage('Wait for Service Readiness') {
             steps {
                 echo "Waiting for API to start..."
-                sh """
-                for i in {1..15}
+                sh '''
+                for i in {1..20}
                 do
                     sleep 2
-                    if curl -s http://localhost:${PORT}/docs > /dev/null
+                    if curl -s http://localhost:8000/docs > /dev/null
                     then
                         echo "API is ready"
                         exit 0
@@ -38,15 +37,16 @@ pipeline {
                 done
                 echo "API did not start in time"
                 exit 1
-                """
+                '''
             }
         }
 
         stage('Valid Inference Test') {
             steps {
                 echo "Sending valid inference request..."
-                sh """
-                RESPONSE=\$(curl -s -X POST http://localhost:${PORT}/predict \
+
+                sh '''
+                RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
                 -H "Content-Type: application/json" \
                 -d '{
                   "fixed_acidity": 7.4,
@@ -62,29 +62,32 @@ pipeline {
                   "alcohol": 9.4
                 }')
 
-                echo "Response: \$RESPONSE"
+                echo "Response: $RESPONSE"
 
-                echo \$RESPONSE | grep "wine_quality" || exit 1
-                """
+                echo $RESPONSE | grep "wine_quality" || exit 1
+                echo $RESPONSE | grep "name" || exit 1
+                echo $RESPONSE | grep "roll_no" || exit 1
+                '''
             }
         }
 
         stage('Invalid Inference Test') {
             steps {
                 echo "Sending invalid inference request..."
-                sh """
-                STATUS=\$(curl -s -o /dev/null -w "%{http_code}" \
-                -X POST http://localhost:${PORT}/predict \
+
+                sh '''
+                STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X POST http://localhost:8000/predict \
                 -H "Content-Type: application/json" \
                 -d '{"fixed_acidity": 7.4}')
 
-                echo "HTTP Status: \$STATUS"
+                echo "HTTP Status: $STATUS"
 
-                if [ "\$STATUS" -ne 422 ]; then
+                if [ "$STATUS" -ne 422 ]; then
                     echo "Invalid request test failed"
                     exit 1
                 fi
-                """
+                '''
             }
         }
 

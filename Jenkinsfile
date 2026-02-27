@@ -64,7 +64,7 @@ pipeline {
 
                 echo "Response: $RESPONSE"
 
-                echo $RESPONSE | grep "wine_quality" || exit 1
+                echo $RESPONSE | grep "wrong_field" || exit 1
                 echo $RESPONSE | grep "name" || exit 1
                 echo $RESPONSE | grep "roll_no" || exit 1
                 '''

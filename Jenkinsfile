@@ -4,7 +4,6 @@ pipeline {
     environment {
         IMAGE_NAME = "2022bcs0102sindhuvarshinisp/2022bcs0102-wine-quality:latest"
         CONTAINER_NAME = "wine_test_container"
-        PORT = "8001"
     }
 
     stages {
@@ -18,8 +17,8 @@ pipeline {
 
         stage('Run Container') {
             steps {
-                echo "Starting container..."
-                sh "docker run -d -p ${PORT}:8000 --name ${CONTAINER_NAME} ${IMAGE_NAME}"
+                echo "Starting container inside jenkins-net..."
+                sh "docker run -d --network jenkins-net --name ${CONTAINER_NAME} ${IMAGE_NAME}"
             }
         }
 
@@ -30,7 +29,7 @@ pipeline {
                 for i in {1..20}
                 do
                     sleep 2
-                    if curl -s http://host.docker.internal:8001/docs > /dev/null
+                    if curl -s http://wine_test_container:8000/docs > /dev/null
                     then
                         echo "API is ready"
                         exit 0
@@ -47,7 +46,7 @@ pipeline {
                 echo "Sending valid inference request..."
 
                 sh '''
-                RESPONSE=$(curl -s -X POST http://host.docker.internal:8001/predict \
+                RESPONSE=$(curl -s -X POST http://wine_test_container:8000/predict \
                 -H "Content-Type: application/json" \
                 -d '{
                   "fixed_acidity": 7.4,
@@ -78,7 +77,7 @@ pipeline {
 
                 sh '''
                 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-                -X POST http://host.docker.internal:8001/predict \
+                -X POST http://wine_test_container:8000/predict \
                 -H "Content-Type: application/json" \
                 -d '{"fixed_acidity": 7.4}')
 
